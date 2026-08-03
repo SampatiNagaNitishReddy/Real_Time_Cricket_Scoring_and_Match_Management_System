@@ -57,8 +57,66 @@ public class Match {
     private int currentInnings = 1; // 1 = first innings, 2 = second innings
     private String resultSummary;
     private int target;
+    // First Innings
+    private String firstInningsOpeningStrikerId;
+    private String firstInningsOpeningNonStrikerId;
+    private String firstInningsOpeningBowlerId;
+
+    // Second Innings
+    private String secondInningsOpeningStrikerId;
+    private String secondInningsOpeningNonStrikerId;
+    private String secondInningsOpeningBowlerId;
 
     // --- Getters & Setters ---
+
+    public String getFirstInningsOpeningStrikerId() {
+        return firstInningsOpeningStrikerId;
+    }
+
+    public void setFirstInningsOpeningStrikerId(String firstInningsOpeningStrikerId) {
+        this.firstInningsOpeningStrikerId = firstInningsOpeningStrikerId;
+    }
+
+    public String getFirstInningsOpeningNonStrikerId() {
+        return firstInningsOpeningNonStrikerId;
+    }
+
+    public void setFirstInningsOpeningNonStrikerId(String firstInningsOpeningNonStrikerId) {
+        this.firstInningsOpeningNonStrikerId = firstInningsOpeningNonStrikerId;
+    }
+
+    public String getFirstInningsOpeningBowlerId() {
+        return firstInningsOpeningBowlerId;
+    }
+
+    public void setFirstInningsOpeningBowlerId(String firstInningsOpeningBowlerId) {
+        this.firstInningsOpeningBowlerId = firstInningsOpeningBowlerId;
+    }
+
+    public String getSecondInningsOpeningStrikerId() {
+        return secondInningsOpeningStrikerId;
+    }
+
+    public void setSecondInningsOpeningStrikerId(String secondInningsOpeningStrikerId) {
+        this.secondInningsOpeningStrikerId = secondInningsOpeningStrikerId;
+    }
+
+    public String getSecondInningsOpeningNonStrikerId() {
+        return secondInningsOpeningNonStrikerId;
+    }
+
+    public void setSecondInningsOpeningNonStrikerId(String secondInningsOpeningNonStrikerId) {
+        this.secondInningsOpeningNonStrikerId = secondInningsOpeningNonStrikerId;
+    }
+
+    public String getSecondInningsOpeningBowlerId() {
+        return secondInningsOpeningBowlerId;
+    }
+
+    public void setSecondInningsOpeningBowlerId(String secondInningsOpeningBowlerId) {
+        this.secondInningsOpeningBowlerId = secondInningsOpeningBowlerId;
+    }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 

@@ -1,5 +1,7 @@
 package com.nitish.cricket.cricket_platform.controller;
 
+import com.nitish.cricket.cricket_platform.dto.PlayerSearchDTO;
+import com.nitish.cricket.cricket_platform.dto.UserProfileResponse;
 import com.nitish.cricket.cricket_platform.model.User;
 import com.nitish.cricket.cricket_platform.service.ImageUploadService;
 import com.nitish.cricket.cricket_platform.service.UserService;
@@ -13,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 public class UserController {
@@ -97,6 +100,28 @@ public class UserController {
         }
     }
 
+    @GetMapping("/user/me")
+    public ResponseEntity<?> getCurrentUser(Authentication auth) {
+
+        String userId = auth.getName();
+
+        Optional<User> optionalUser = userService.getUserByUserId(userId);
+
+        if (optionalUser.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        User user = optionalUser.get();
+
+        UserProfileResponse response = new UserProfileResponse();
+
+        response.setUserId(user.getUserId());
+        response.setName(user.getName());
+        response.setEmail(user.getEmail());
+        response.setProfileImage(user.getProfileImage());
+
+        return ResponseEntity.ok(response);
+    }
     // 5. GET /users
     @GetMapping("/users")
     public ResponseEntity<List<User>> getAllUsers() {
@@ -135,5 +160,44 @@ public class UserController {
             return ResponseEntity.notFound().build();
         }
     }
+
+    @GetMapping("user/search")
+    public ResponseEntity<?> searchPlayers(
+            @RequestParam String keyword) {
+
+        try {
+
+            return ResponseEntity.ok(
+                    userService.searchPlayers(keyword)
+            );
+
+        } catch (IllegalArgumentException e) {
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(
+                            "type", "BAD_REQUEST",
+                            "message", e.getMessage()
+                    ));
+
+        } catch (IllegalStateException e) {
+
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "type", "CONFLICT",
+                            "message", e.getMessage()
+                    ));
+
+        } catch (Exception e) {
+
+            e.printStackTrace();
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "type", "ERROR",
+                            "message", "Unexpected server error"
+                    ));
+        }
+    }
+
 
 }

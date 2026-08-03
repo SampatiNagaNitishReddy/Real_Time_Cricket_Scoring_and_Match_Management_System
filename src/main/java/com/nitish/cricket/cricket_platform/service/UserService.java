@@ -1,5 +1,6 @@
 package com.nitish.cricket.cricket_platform.service;
 
+import com.nitish.cricket.cricket_platform.dto.PlayerSearchDTO;
 import com.nitish.cricket.cricket_platform.model.User;
 import com.nitish.cricket.cricket_platform.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,10 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Random;
+import java.util.*;
 
 @Service
 public class UserService {
@@ -58,6 +56,10 @@ public class UserService {
 
     public Optional<User> getUserByUserId(String userId) {
         return userRepository.findByUserId(userId);
+    }
+
+    public List<User> getUsersByIds(List<String> userIds) {
+        return userRepository.findByUserIdIn(userIds);
     }
 
     public List<User> getAllUsers() {
@@ -135,6 +137,30 @@ public class UserService {
         return userRepository.findByUserId(userId)
                 .map(User::getTeams)
                 .orElse(null);
+    }
+
+    public List<PlayerSearchDTO> searchPlayers(String keyword) {
+
+        if (keyword == null || keyword.trim().length() < 2) {
+            throw new IllegalArgumentException(
+                    "Keyword must contain at least 2 characters."
+            );
+        }
+
+        return userRepository
+                .findTop10ByNameContainingIgnoreCase(keyword)
+                .stream()
+                .map(user -> {
+                    PlayerSearchDTO dto = new PlayerSearchDTO();
+
+                    dto.setUserId(user.getUserId());
+                    dto.setName(user.getName());
+                    dto.setPlace(user.getPlace());
+                    dto.setProfileImage(user.getProfileImage());
+
+                    return dto;
+                })
+                .toList();
     }
 
 }

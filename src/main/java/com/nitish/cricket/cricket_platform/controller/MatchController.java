@@ -1,10 +1,13 @@
 package com.nitish.cricket.cricket_platform.controller;
 
 import com.nitish.cricket.cricket_platform.dto.AddBallRequest;
+import com.nitish.cricket.cricket_platform.dto.MatchDetails.MatchDetailsDTO;
+import com.nitish.cricket.cricket_platform.dto.MatchResponseDTO;
 import com.nitish.cricket.cricket_platform.dto.SetBatsmenRequest;
 import com.nitish.cricket.cricket_platform.dto.SetBowlerRequest;
 import com.nitish.cricket.cricket_platform.model.Match;
 import com.nitish.cricket.cricket_platform.model.Team;
+import com.nitish.cricket.cricket_platform.model.enums.MatchStatus;
 import com.nitish.cricket.cricket_platform.model.enums.TossDecision;
 import com.nitish.cricket.cricket_platform.model.over.Ball;
 import com.nitish.cricket.cricket_platform.model.over.Wicket;
@@ -16,12 +19,13 @@ import com.nitish.cricket.cricket_platform.service.MatchService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
 @RestController
-@RequestMapping("/api/matches")
+@RequestMapping("/matches")
 public class MatchController {
 
     @Autowired
@@ -32,20 +36,47 @@ public class MatchController {
     private UserRepository userRepository;
 
     @PostMapping
-    public ResponseEntity<?> createMatch(@RequestBody Match match) {
+    public ResponseEntity<?> createMatch(
+            @RequestBody Match match) {
+
         try {
             Match savedMatch = matchService.createMatch(match);
-            return ResponseEntity.ok(savedMatch);
+            return ResponseEntity.status(HttpStatus.CREATED).body(savedMatch);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(Map.of("error", "Unexpected error: " + e.getMessage()));
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An unexpected error occurred"));
         }
     }
 
     @GetMapping
-    public ResponseEntity<List<Match>> getAllMatches() {
+    public ResponseEntity<List<MatchResponseDTO>> getAllMatches() {
         return ResponseEntity.ok(matchService.getAllMatches());
+    }
+
+    @GetMapping("/{matchId}/details")
+    public ResponseEntity<MatchDetailsDTO> getMatchDetails(@PathVariable String matchId) {
+
+        //long start = System.currentTimeMillis();
+        //System.out.println("DETAILS START");
+
+        try {
+
+            MatchDetailsDTO dto = matchService.getMatchDetails(matchId);
+
+            if (dto == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            return ResponseEntity.ok(dto);
+
+        } finally {
+
+            //System.out.println("DETAILS END : " +(System.currentTimeMillis() - start) + " ms");
+        }
     }
 
     @GetMapping("/{matchId}")
@@ -67,59 +98,190 @@ public class MatchController {
                 : ResponseEntity.notFound().build();
     }
 
+    @PostMapping("/{matchId}/toss")
+    public ResponseEntity<?> conductToss(
+            @PathVariable String matchId,
+            @RequestParam String tossWinner,
+            @RequestParam TossDecision tossDecision,
+            Authentication auth) {
+
+        try {
+            if (auth == null) {
+
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of(
+                                "type", "UNAUTHORIZED",
+                                "message", "UNAUTHORIZED: Authentication required."
+                        ));
+
+            }
+
+            Match match = matchService.conductToss(
+                    matchId,
+                    tossWinner,
+                    tossDecision,
+                    auth.getName()
+            );
+
+            return ResponseEntity.ok(match);
+
+        } catch (IllegalArgumentException e) {
+
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+
+        } catch (IllegalStateException e) {
+
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage()));
+
+        } catch (Exception e) {
+
+            e.printStackTrace();
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An unexpected error occurred."));
+
+        }
+
+    }
+
     // ✅ Start match
     @PostMapping("/{matchId}/start")
     public ResponseEntity<?> startMatch(
             @PathVariable String matchId,
-            @RequestParam String tossWinner,
-            @RequestParam TossDecision tossDecision
+            Authentication auth
     ) {
+
         try {
-            Match match = matchService.startMatch(matchId, tossWinner, tossDecision);
+
+            if (auth == null) {
+
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of(
+                                "type", "UNAUTHORIZED",
+                                "message", "UNAUTHORIZED: Authentication required."
+                        ));
+
+            }
+
+            Match match = matchService.startMatch(
+                    matchId,
+                    auth.getName()
+            );
+
             return ResponseEntity.ok(match);
+
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+
+        } catch (IllegalStateException e) {
+
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage()));
+
+        } catch (Exception e) {
+
+            e.printStackTrace();
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An unexpected error occurred."));
+
         }
+
     }
 
-    // ✅ End match
     @PostMapping("/{matchId}/end")
-    public ResponseEntity<?> endMatch(@PathVariable String matchId) {
-        Match ended = matchService.endMatch(matchId);
-        return ended != null ? ResponseEntity.ok(ended) : ResponseEntity.notFound().build();
+    public ResponseEntity<?> endMatch(
+            @PathVariable String matchId,
+            @RequestParam MatchStatus reason,
+            Authentication auth) {
+
+        // ✅ Guard against unauthenticated access
+        if (auth == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "UNAUTHORIZED: Authentication required."));
+        }
+
+        try {
+            Match ended = matchService.endMatch(matchId, reason, auth.getName());
+            return ResponseEntity.ok(ended);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An unexpected error occurred"));
+        }
     }
 
     //addball
     @PostMapping("/{matchId}/balls")
     public ResponseEntity<?> addBall(
             @PathVariable String matchId,
-            @RequestBody AddBallRequest request
-    ) {
+            @RequestBody AddBallRequest request,
+            Authentication auth) {
+
+        long start = System.currentTimeMillis();
+        System.out.println("ADD BALL START");
+
         try {
-            Match updated = matchService.addBall(matchId, request);
+
+            // ✅ Guard against unauthenticated access
+            if (auth == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of(
+                                "type", "UNAUTHORIZED",
+                                "message", "UNAUTHORIZED: Authentication required."
+                        ));
+            }
+
+            Match updated = matchService.addBall(matchId, request, auth.getName());
             return ResponseEntity.ok(updated);
 
         } catch (IllegalStateException e) {
+
             String message = e.getMessage();
-            Map<String, String> response = new HashMap<>();
-            if (message.startsWith("NEXT_BATSMAN_REQUIRED")) {
-                response.put("type", "NEXT_BATSMAN_REQUIRED");
-            } else if (message.startsWith("CONSECUTIVE_OVERS_NOT_ALLOWED")) {
-                response.put("type", "CONSECUTIVE_OVERS_NOT_ALLOWED");
-            } else {
-                response.put("type", "ERROR");
-            }
-            response.put("message", message);
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+            String type = message.contains(":")
+                    ? message.split(":", 2)[0].trim()
+                    : "ERROR";
+
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "type", type,
+                            "message", message
+                    ));
 
         } catch (IllegalArgumentException e) {
+
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("type", "ERROR", "message", e.getMessage()));
+                    .body(Map.of(
+                            "type", "ERROR",
+                            "message", e.getMessage()
+                    ));
 
         } catch (Exception e) {
+
             e.printStackTrace();
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("type", "ERROR", "message", "Unexpected server error", "details", e.getMessage()));
+                    .body(Map.of(
+                            "type", "ERROR",
+                            "message", "Unexpected server error"
+                    ));
+
+        } finally {
+            System.out.println(
+                    "ADD BALL END : " +
+                            (System.currentTimeMillis() - start) +
+                            " ms"
+            );
         }
     }
 
@@ -135,24 +297,46 @@ public class MatchController {
 
     // ------------------ End First Innings ------------------
     @PostMapping("/{matchId}/end-first-innings")
-    public ResponseEntity<?> endFirstInnings(@PathVariable String matchId) {
+    public ResponseEntity<?> endFirstInnings(
+            @PathVariable String matchId,
+            Authentication auth) {
+
         try {
-            Match updatedMatch = matchService.endFirstInnings(matchId);
-            return ResponseEntity.ok(updatedMatch);
-        } catch (IllegalStateException | IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(ex.getMessage());
+            Match updated = matchService.endFirstInnings(matchId, auth.getName());
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An unexpected error occurred"));
         }
     }
 
 
     // ------------------ Start Second Innings ------------------
     @PostMapping("/{matchId}/start-second-innings")
-    public ResponseEntity<?> startSecondInnings(@PathVariable String matchId) {
+    public ResponseEntity<?> startSecondInnings(
+            @PathVariable String matchId,
+            Authentication auth) {
+
         try {
-            Match updatedMatch = matchService.startSecondInnings(matchId);
-            return ResponseEntity.ok(updatedMatch);
-        } catch (IllegalStateException | IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(ex.getMessage());
+            Match updated = matchService.startSecondInnings(matchId, auth.getName());
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An unexpected error occurred"));
         }
     }
 
@@ -160,62 +344,168 @@ public class MatchController {
     @PutMapping("/{matchId}/man-of-the-match")
     public ResponseEntity<?> setManOfTheMatch(
             @PathVariable String matchId,
-            @RequestParam String userId
-    ) {
+            @RequestParam String userId,
+            Authentication auth) {
+
         try {
-            matchService.setManOfTheMatch(matchId, userId);
+            matchService.setManOfTheMatch(matchId, userId, auth.getName());
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Man of the Match set successfully",
                     "matchId", matchId,
                     "userId", userId
             ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(
+                            "success", false,
+                            "error", e.getMessage()
+                    ));
         } catch (IllegalStateException e) {
-            // handled logical errors (match not completed, already set, not found)
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", e.getMessage()
-            ));
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "success", false,
+                            "error", e.getMessage()
+                    ));
         } catch (Exception e) {
-            // fallback for unexpected server errors
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "success", false,
-                    "message", "Something went wrong while setting Man of the Match"
-            ));
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "success", false,
+                            "error", "Something went wrong while setting Man of the Match"
+                    ));
         }
     }
 
     // ✅ Set batsmen
     @PostMapping("/{matchId}/set-batsmen")
-    public ResponseEntity<Match> setBatsmen(
+    public ResponseEntity<?> setBatsmen(
             @PathVariable String matchId,
-            @RequestBody SetBatsmenRequest request
-    ) {
+            @RequestBody SetBatsmenRequest request, Authentication auth) {
+
+        System.out.println("MatchID: " + matchId);
+        System.out.println("Received request: " + request.getStrikerId() + " - " + request.getNonStrikerId());
+
+        // ✅ Guard against unauthenticated access
+        if (auth == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "UNAUTHORIZED: Authentication required."));
+        }
+
         try {
-            System.out.println("MatchID: " + matchId);
-            System.out.println("Received request: " + request.getStrikerId() + " - " + request.getNonStrikerId());
-            Match updated = matchService.setBatsmen(matchId, request.getStrikerId(), request.getNonStrikerId());
+            Match updated = matchService.setBatsmen(matchId, request.getStrikerId(), request.getNonStrikerId(), auth.getName());
             return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An unexpected error occurred"));
         }
     }
 
     // ✅ Set bowler
     @PostMapping("/{matchId}/set-bowler")
-    public ResponseEntity<Match> setBowler(
+    public ResponseEntity<?> setBowler(
             @PathVariable String matchId,
-            @RequestBody SetBowlerRequest request
-    ) {
+            @RequestBody SetBowlerRequest request, Authentication auth) {
+
+        System.out.println("MatchID: " + matchId);
+        System.out.println("Received request: " + request.getBowlerId());
+
+        // ✅ Guard against unauthenticated access
+        if (auth == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "UNAUTHORIZED: Authentication required."));
+        }
+
         try {
-            System.out.println("MatchID: " + matchId);
-            System.out.println("Received request: " + request.getBowlerId());
-            Match updated = matchService.setBowler(matchId, request.getBowlerId());
+            Match updated = matchService.setBowler(matchId, request.getBowlerId(),auth.getName());
             return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.badRequest().body(null);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An unexpected error occurred"));
         }
+    }
+
+
+    // ✅ Undo last ball
+    @PutMapping("/{matchId}/undo-last-ball")
+    public ResponseEntity<?> undoLastBall(
+            @PathVariable String matchId,
+            Authentication auth) {
+
+        // Guard against unauthenticated access
+        if (auth == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "UNAUTHORIZED: Authentication required."));
+        }
+
+        try {
+
+            Match updatedMatch = matchService.undoBall(matchId, auth.getName());
+
+            return ResponseEntity.ok(updatedMatch);
+
+        } catch (IllegalArgumentException | IllegalStateException e) {
+
+            return ResponseEntity.badRequest()
+                    .body(Map.of(
+                            "error",
+                            e.getMessage() != null ? e.getMessage() : "Bad Request"
+                    ));
+
+        } catch (Exception e) {
+
+            // Print full stacktrace to console
+            e.printStackTrace();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("error",
+                    e.getMessage() != null
+                            ? e.getMessage()
+                            : e.getClass().getSimpleName());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(response);
+        }
+    }
+
+    @GetMapping("/my-live-matches")
+    public ResponseEntity<?> getMyLiveMatches(
+            Authentication auth
+    ) {
+
+        try {
+            System.out.println("Authentication Name = " + auth.getName());
+            List<MatchResponseDTO> matches =
+                    matchService.getMyLiveMatches(
+                            auth.getName()
+                    );
+
+            return ResponseEntity.ok(matches);
+
+        } catch (Exception ex) {
+
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(
+                            "error",
+                            ex.getMessage()
+                    ));
+
+        }
+
     }
 }

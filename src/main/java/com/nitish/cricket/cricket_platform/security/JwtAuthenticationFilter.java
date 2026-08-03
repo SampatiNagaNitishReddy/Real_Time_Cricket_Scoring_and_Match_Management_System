@@ -36,8 +36,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = null;
 
-        // 🔹 Read JWT from cookies
+        // Read JWT from cookies
         Cookie[] cookies = request.getCookies();
+
 
         if (cookies != null) {
             for (Cookie cookie : cookies) {
@@ -48,24 +49,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
 
-        // 🔹 If no token or invalid → continue
-        if (token == null || !jwtUtil.validateToken(token)) {
-            filterChain.doFilter(request, response);
-            return;
+        // If token exists and valid
+        if (token != null && jwtUtil.validateToken(token)) {
+
+            String userId = jwtUtil.extractUserId(token);
+
+            // Avoid resetting authentication repeatedly
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userId,
+                                null,
+                                Collections.emptyList()
+                        );
+
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
         }
-
-        // 🔹 Extract userId directly from JWT claim
-        String userId = jwtUtil.extractUserId(token);
-
-        // 🔹 Create authentication with userId as principal
-        UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(
-                        userId,                     // 👈 principal
-                        null,
-                        Collections.emptyList()     // add roles later if needed
-                );
-
-        SecurityContextHolder.getContext().setAuthentication(authentication);
 
         filterChain.doFilter(request, response);
     }

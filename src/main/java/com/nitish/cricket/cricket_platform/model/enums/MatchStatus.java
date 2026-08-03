@@ -4,6 +4,8 @@ public enum MatchStatus {
 
     // --- Pre-match ---
     SCHEDULED,          // Match is created but not started yet
+    TOSS_COMPLETED,
+    PLAYING_XI_SELECTED,
 
     // --- During match ---
     LIVE_FIRST_INNINGS, // First innings is currently in progress

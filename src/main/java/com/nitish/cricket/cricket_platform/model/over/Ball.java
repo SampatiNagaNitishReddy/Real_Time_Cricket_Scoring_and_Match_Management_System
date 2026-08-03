@@ -1,5 +1,6 @@
 package com.nitish.cricket.cricket_platform.model.over;
 
+import com.nitish.cricket.cricket_platform.model.BattingPair;
 import com.nitish.cricket.cricket_platform.model.scoring.Extras;
 
 public class Ball {
@@ -12,6 +13,18 @@ public class Ball {
 
     private Wicket wicket;
     private Extras extras; // holds details like wides, no-balls, etc.
+    // NEW
+
+
+    private BattingPair nextBattingPair;
+
+    public BattingPair getNextBattingPair() {
+        return nextBattingPair;
+    }
+
+    public void setNextBattingPair(BattingPair nextBattingPair) {
+        this.nextBattingPair = nextBattingPair;
+    }
 
     public int getBallNumber() { return ballNumber; }
     public void setBallNumber(int ballNumber) { this.ballNumber = ballNumber; }

@@ -94,4 +94,8 @@ public interface UserRepository extends MongoRepository<User, String> {
     List<LowestBowlingAverageResponse> findLowestAverage(Pageable pageable);
 
     Optional<User> findByEmailIgnoreCase(String email);
+
+    List<User> findByUserIdIn(List<String> userIds);
+
+    List<User> findTop10ByNameContainingIgnoreCase(String keyword);
 }
