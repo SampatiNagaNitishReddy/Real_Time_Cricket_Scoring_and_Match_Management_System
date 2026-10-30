@@ -1022,6 +1022,7 @@ public class MatchService {
         Ball ball = new Ball();
         ball.setBowler(currentBowlerId);
         ball.setBatsman(originalStrikerId);
+        ball.setNonStriker(nonStrikerId);
 
         Extras ballExtras = new Extras();
         if (request.isWide()) ballExtras.setWides(1);
@@ -1620,6 +1621,7 @@ public class MatchService {
                     pair.setNonStrikerId(nonStrikerId);
 
                     lastBall.setNextBattingPair(pair);
+
                 }
             }
         }
@@ -1640,6 +1642,8 @@ public class MatchService {
             }
 
         }
+
+        ensureScorecardEntries(match);
 
         return matchRepository.save(match);
     }
@@ -1753,6 +1757,8 @@ public class MatchService {
 
             match.setSecondInningsOpeningBowlerId(bowlerId);
         }
+
+        ensureScorecardEntries(match);
         return matchRepository.save(match);
     }
 
@@ -1828,26 +1834,27 @@ public class MatchService {
 
             battingTeam.setCurrentBowlerId(over.getBowlerId());
 
-            for (int i = 0; i < over.getBalls().size(); i++) {
+            for (Ball ball : over.getBalls()) {
 
-                Ball ball = over.getBalls().get(i);
+                // Put back the exact pair that was at the crease for this ball.
+                // Balls recorded before this fix have no nonStriker, so they fall
+                // back to the pair restored after the previous ball (old behaviour).
+                if (ball.getNonStriker() != null) {
+                    battingTeam.setStrikerId(ball.getBatsman());
+                    battingTeam.setNonStrikerId(ball.getNonStriker());
+                }
 
-                AddBallRequest request = createAddBallRequest(ball);
+                applyBall(match, createAddBallRequest(ball));
 
-                applyBall(match, request);
-
-                // Restore batting pair for the NEXT delivery
+                // Restore the batting pair for the NEXT delivery (unchanged)
                 if (ball.getNextBattingPair() != null) {
-
-                    battingTeam.setStrikerId(
-                            ball.getNextBattingPair().getStrikerId());
-
-                    battingTeam.setNonStrikerId(
-                            ball.getNextBattingPair().getNonStrikerId());
+                    battingTeam.setStrikerId(ball.getNextBattingPair().getStrikerId());
+                    battingTeam.setNonStrikerId(ball.getNextBattingPair().getNonStrikerId());
                 }
             }
         }
 
+        ensureScorecardEntries(match);
         return matchRepository.save(match);
     }
 
@@ -1915,35 +1922,29 @@ public class MatchService {
 
     public List<MatchResponseDTO> getMyLiveMatches(String userId) {
 
-        // ===========================
-        // AUTHENTICATED USER
-        // ===========================
-        System.out.println("========== MY LIVE MATCHES ==========");
-        System.out.println("Authenticated UserId : " + userId);
+
 
         // ===========================
         // VERIFY USER EXISTS
         // ===========================
         Optional<User> user = userRepository.findByUserId(userId);
 
-        System.out.println("User Exists : " + user.isPresent());
 
         user.orElseThrow(() ->
                 new RuntimeException("User not found."));
 
-        System.out.println("User Verified Successfully");
+
 
         // ===========================
         // FETCH MATCHES
         // ===========================
         List<Match> matches = matchRepository.findMyLiveMatches(userId);
 
-        System.out.println("Live Matches Found : " + matches.size());
+
 
         return matches.stream().map(match -> {
 
-            System.out.println("------------------------------------");
-            System.out.println("Processing Match : " + match.getMatchId());
+
 
             MatchResponseDTO dto = new MatchResponseDTO();
 
@@ -1954,7 +1955,7 @@ public class MatchService {
                     .orElseThrow(() ->
                             new RuntimeException("Team A not found: " + match.getTeamA()));
 
-            System.out.println("Team A : " + teamA.getName());
+
 
             // ===========================
             // LOAD TEAM B
@@ -1963,7 +1964,7 @@ public class MatchService {
                     .orElseThrow(() ->
                             new RuntimeException("Team B not found: " + match.getTeamB()));
 
-            System.out.println("Team B : " + teamB.getName());
+
 
             // ===========================
             // BASIC MATCH DETAILS
@@ -1998,8 +1999,7 @@ public class MatchService {
                 dto.setTossWinnerName(tossWinnerName);
                 dto.setTossDecision(match.getTossDecision());
 
-                System.out.println("Toss Winner : " + tossWinnerName);
-                System.out.println("Toss Decision : " + match.getTossDecision());
+
             }
 
             // ===========================
@@ -2018,7 +2018,7 @@ public class MatchService {
                                         && match.getTossDecision() == TossDecision.BOWL);
             }
 
-            System.out.println("Team A Bats First : " + teamABatsFirst);
+
 
             int teamAScore = 0;
             int teamAWickets = 0;
@@ -2058,8 +2058,7 @@ public class MatchService {
                 }
             }
 
-            System.out.println(teamA.getName() + " : " + teamAScore + "/" + teamAWickets);
-            System.out.println(teamB.getName() + " : " + teamBScore + "/" + teamBWickets);
+
 
             dto.setTeamAScore(teamAScore);
             dto.setTeamAWickets(teamAWickets);
@@ -2114,10 +2113,10 @@ public class MatchService {
                     dto.setResultDisplay(result);
                 }
 
-                System.out.println("Result : " + dto.getResultDisplay());
+
             }
 
-            System.out.println("Finished Processing Match : " + match.getMatchId());
+
 
             return dto;
 
@@ -2130,7 +2129,7 @@ public class MatchService {
 
         Match match = matchRepository.findByMatchId(matchId).orElse(null);
 
-        //  System.out.println("Repository : " + (System.currentTimeMillis() - t1) + " ms");
+
 
         if (match == null) return null;
 
@@ -2138,7 +2137,7 @@ public class MatchService {
 
         MatchDetailsDTO dto = matchDetailsMapper.toDTO(match);
 
-        //System.out.println("Mapper : " + (System.currentTimeMillis() - t2) + " ms");
+
 
         return dto;
     }
@@ -2444,6 +2443,7 @@ public class MatchService {
         copy.setRuns(original.getRuns());
         copy.setLegal(original.isLegal());
         copy.setFreeHit(original.isFreeHit());
+        copy.setNonStriker(original.getNonStriker());
 
         // Extras
         if (original.getExtras() != null) {
@@ -2462,7 +2462,8 @@ public class MatchService {
         if (original.getWicket() != null) {
 
             Wicket wicket = new Wicket();
-
+            //fix
+            wicket.setOut(original.getWicket().isOut());
             wicket.setDismissalType(original.getWicket().getDismissalType());
             wicket.setFielderId(original.getWicket().getFielderId());
             wicket.setOutBatsmanId(original.getWicket().getOutBatsmanId());
@@ -2528,6 +2529,64 @@ public class MatchService {
         }
 
         return request;
+    }
+
+    private void ensureBatting(TeamScore team, String batsmanId) {
+
+        if (team == null || batsmanId == null) return;
+
+        if (team.getBatting() == null) {
+            team.setBatting(new ArrayList<>());
+        }
+
+        boolean exists = team.getBatting().stream()
+                .anyMatch(b -> batsmanId.equals(b.getBatsmanId()));
+
+        if (!exists) {
+            Batting entry = new Batting();
+            entry.setBatsmanId(batsmanId);
+            team.getBatting().add(entry);   // all numbers start at 0
+        }
+    }
+
+    private void ensureBowling(TeamScore team, String bowlerId) {
+
+        if (team == null || bowlerId == null) return;
+
+        if (team.getBowling() == null) {
+            team.setBowling(new ArrayList<>());
+        }
+
+        boolean exists = team.getBowling().stream()
+                .anyMatch(b -> bowlerId.equals(b.getBowlerId()));
+
+        if (!exists) {
+            Bowling entry = new Bowling();
+            entry.setBowlerId(bowlerId);
+            team.getBowling().add(entry);   // all numbers start at 0
+        }
+    }
+
+    // Makes sure the players at the crease and the current bowler have scorecard rows
+    private void ensureScorecardEntries(Match match) {
+
+        int innings = match.getCurrentInnings();
+
+        Scorecard scorecard = (innings == 1)
+                ? match.getFirstInningsScorecard()
+                : match.getSecondInningsScorecard();
+
+        TeamScore battingTeam = determineBattingTeam(match, innings);
+
+        if (scorecard == null || battingTeam == null) return;
+
+        TeamScore bowlingTeam = (battingTeam == scorecard.getTeamA())
+                ? scorecard.getTeamB()
+                : scorecard.getTeamA();
+
+        ensureBatting(battingTeam, battingTeam.getStrikerId());
+        ensureBatting(battingTeam, battingTeam.getNonStrikerId());
+        ensureBowling(bowlingTeam, battingTeam.getCurrentBowlerId());
     }
 
 }

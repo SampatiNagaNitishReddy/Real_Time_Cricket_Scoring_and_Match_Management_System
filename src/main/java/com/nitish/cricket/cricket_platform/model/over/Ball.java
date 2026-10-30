@@ -15,8 +15,17 @@ public class Ball {
     private Extras extras; // holds details like wides, no-balls, etc.
     // NEW
 
+    private String nonStriker;
 
     private BattingPair nextBattingPair;
+
+    public String getNonStriker() {
+        return nonStriker;
+    }
+
+    public void setNonStriker(String nonStriker) {
+        this.nonStriker = nonStriker;
+    }
 
     public BattingPair getNextBattingPair() {
         return nextBattingPair;
