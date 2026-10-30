@@ -4,9 +4,10 @@ import com.nitish.cricket.cricket_platform.dto.AuthResult;
 import com.nitish.cricket.cricket_platform.dto.LoginRequest;
 import com.nitish.cricket.cricket_platform.dto.LoginResponse;
 import com.nitish.cricket.cricket_platform.service.AuthService;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,14 +25,15 @@ public class AuthController {
 
         AuthResult authResult = authService.login(request);
 
-        Cookie cookie = new Cookie("jwt", authResult.getToken());
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(60 * 60 * 10); // 10 hours
-        cookie.setSecure(false); // true in production (HTTPS)
+        ResponseCookie cookie = ResponseCookie.from("jwt", authResult.getToken())
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(60 * 60 * 10)
+                .sameSite("None")
+                .build();
 
-        response.addCookie(cookie);
-
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         return ResponseEntity.ok(
                 new LoginResponse(
                         authResult.getUserId(),
@@ -43,14 +45,15 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletResponse response) {
 
-        Cookie cookie = new Cookie("jwt", null);
+        ResponseCookie cookie = ResponseCookie.from("jwt", "")
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(0)
+                .sameSite("None")
+                .build();
 
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // true in production
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
-
-        response.addCookie(cookie);
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
 
         return ResponseEntity.ok("Logged out successfully");
     }
